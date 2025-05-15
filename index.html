@@ -1,0 +1,746 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Color Gradient</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        
+        #canvas-container {
+            width: 100%;
+            max-width: 1200px;
+            height: 100vh;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        canvas {
+            width: 100%;
+            height: auto;
+            max-height: 100vh;
+            display: block;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            color: white;
+            max-width: 250px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 100;
+        }
+        
+        #ui h2 {
+            margin-top: 0;
+            font-size: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 8px;
+        }
+        
+        .control-group {
+            margin-bottom: 12px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+        }
+        
+        .value-display {
+            font-size: 11px;
+            opacity: 0.7;
+            text-align: right;
+        }
+        
+        button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+            transition: all 0.2s;
+        }
+        
+        button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        button.active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .palette-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        
+        #toggle-ui {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 101;
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #zoom-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 8px;
+            z-index: 100;
+            display: flex;
+            gap: 5px;
+        }
+        
+        #zoom-value {
+            color: white;
+            font-size: 12px;
+            min-width: 40px;
+            text-align: center;
+            line-height: 30px;
+        }
+    </style>
+
+<base target="_self">
+
+
+    </head><body><div id="canvas-container"></div>
+    <button id="toggle-ui">☰</button>
+    
+    <div id="ui">
+        <h2>Gradient Controls</h2>
+        
+        <div class="control-group">
+            <label for="speed">Animation Speed</label>
+            <input type="range" id="speed" min="0" max="2" step="0.1" value="0.5">
+            <div class="value-display" id="speed-value">0.5</div>
+        </div>
+        
+        <div class="control-group">
+            <label for="contrast">Contrast</label>
+            <input type="range" id="contrast" min="0" max="2" step="0.1" value="1">
+            <div class="value-display" id="contrast-value">1.0</div>
+        </div>
+        
+        <div class="control-group">
+            <label for="ripple-intensity">Ripple Intensity</label>
+            <input type="range" id="ripple-intensity" min="0" max="1" step="0.05" value="0.3">
+            <div class="value-display" id="ripple-intensity-value">0.3</div>
+        </div>
+        
+        <div class="control-group">
+            <label>Color Palette</label>
+            <div class="palette-buttons">
+                <button id="palette-vibrant" class="active">Vibrant</button>
+                <button id="palette-muted">Muted</button>
+                <button id="palette-cool">Cool</button>
+                <button id="palette-warm">Warm</button>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label>Interaction</label>
+            <div>
+                <button id="interaction-hue">Hue Shift</button>
+                <button id="interaction-brightness" class="active">Brightness</button>
+                <button id="interaction-both">Both</button>
+            </div>
+        </div>
+        
+        <button id="reset">Reset View</button>
+    </div>
+    
+    <div id="zoom-controls">
+        <button id="zoom-out">-</button>
+        <div id="zoom-value">100%</div>
+        <button id="zoom-in">+</button>
+    </div>
+
+    <script>
+        // Check for WebGL support
+        if (!WebGLRenderingContext) {
+            const container = document.getElementById('canvas-container');
+            container.innerHTML = '<div style="color: white; text-align: center; padding: 20px;">Your browser does not support WebGL. Please try with a modern browser.</div>';
+            throw new Error('WebGL not supported');
+        }
+
+        // Main variables
+        let renderer, scene, camera, material, mesh;
+        let mouseX = 0, mouseY = 0;
+        let targetMouseX = 0, targetMouseY = 0;
+        let clickTime = 0;
+        let clickX = 0, clickY = 0;
+        let zoom = 1.0;
+        let zoomTarget = 1.0;
+        let zoomCenter = { x: 0.5, y: 0.5 };
+        let isDragging = false;
+        let lastX = 0, lastY = 0;
+        let offsetX = 0, offsetY = 0;
+        let targetOffsetX = 0, targetOffsetY = 0;
+
+        // UI elements
+        const ui = document.getElementById('ui');
+        const toggleUI = document.getElementById('toggle-ui');
+        const speedSlider = document.getElementById('speed');
+        const speedValue = document.getElementById('speed-value');
+        const contrastSlider = document.getElementById('contrast');
+        const contrastValue = document.getElementById('contrast-value');
+        const rippleIntensitySlider = document.getElementById('ripple-intensity');
+        const rippleIntensityValue = document.getElementById('ripple-intensity-value');
+        const paletteVibrant = document.getElementById('palette-vibrant');
+        const paletteMuted = document.getElementById('palette-muted');
+        const paletteCool = document.getElementById('palette-cool');
+        const paletteWarm = document.getElementById('palette-warm');
+        const interactionHue = document.getElementById('interaction-hue');
+        const interactionBrightness = document.getElementById('interaction-brightness');
+        const interactionBoth = document.getElementById('interaction-both');
+        const resetButton = document.getElementById('reset');
+        const zoomIn = document.getElementById('zoom-in');
+        const zoomOut = document.getElementById('zoom-out');
+        const zoomValue = document.getElementById('zoom-value');
+
+        // Initialize Three.js
+        function init() {
+            // Calculate dimensions respecting max-width
+            const maxWidth = 1200;
+            const aspectRatio = 16/9;
+            const width = Math.min(window.innerWidth, maxWidth);
+            const height = width / aspectRatio;
+            
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            
+            // Create scene
+            scene = new THREE.Scene();
+            
+            // Create camera
+            camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -1, 1);
+            scene.add(camera);
+            
+            // Create shader material
+            material = new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 },
+                    resolution: { value: new THREE.Vector2(width, height) },
+                    mouse: { value: new THREE.Vector2(0.5, 0.5) },
+                    targetMouse: { value: new THREE.Vector2(0.5, 0.5) },
+                    clickTime: { value: 0 },
+                    clickPos: { value: new THREE.Vector2(0, 0) },
+                    speed: { value: 0.5 },
+                    contrast: { value: 1.0 },
+                    rippleIntensity: { value: 0.3 },
+                    palette: { value: 0 }, // 0 = vibrant, 1 = muted, 2 = cool, 3 = warm
+                    interactionMode: { value: 1 }, // 0 = hue, 1 = brightness, 2 = both
+                    zoom: { value: 1.0 },
+                    zoomCenter: { value: new THREE.Vector2(0.5, 0.5) },
+                    offset: { value: new THREE.Vector2(0, 0) }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    
+                    void main() {
+                        vUv = uv;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    precision highp float;
+                    
+                    uniform float time;
+                    uniform vec2 resolution;
+                    uniform vec2 mouse;
+                    uniform vec2 targetMouse;
+                    uniform float clickTime;
+                    uniform vec2 clickPos;
+                    uniform float speed;
+                    uniform float contrast;
+                    uniform float rippleIntensity;
+                    uniform int palette;
+                    uniform int interactionMode;
+                    uniform float zoom;
+                    uniform vec2 zoomCenter;
+                    uniform vec2 offset;
+                    
+                    varying vec2 vUv;
+                    
+                    // Smooth interpolation function
+                    float smoothInterpolate(float a, float b, float t) {
+                        t = t * t * (3.0 - 2.0 * t);
+                        return mix(a, b, t);
+                    }
+                    
+                    // Generate a pseudo-random number
+                    float random(vec2 st) {
+                        return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453);
+                    }
+                    
+                    // Generate noise
+                    float noise(vec2 st) {
+                        vec2 i = floor(st);
+                        vec2 f = fract(st);
+                        
+                        float a = random(i);
+                        float b = random(i + vec2(1.0, 0.0));
+                        float c = random(i + vec2(0.0, 1.0));
+                        float d = random(i + vec2(1.0, 1.0));
+                        
+                        vec2 u = f * f * (3.0 - 2.0 * f);
+                        
+                        return mix(a, b, u.x) + 
+                               (c - a) * u.y * (1.0 - u.x) + 
+                               (d - b) * u.x * u.y;
+                    }
+                    
+                    // Generate fractal brownian motion
+                    float fbm(vec2 st, int octaves) {
+                        float value = 0.0;
+                        float amplitude = 0.5;
+                        
+                        for (int i = 0; i < octaves; i++) {
+                            value += amplitude * noise(st);
+                            st *= 2.0;
+                            amplitude *= 0.5;
+                        }
+                        
+                        return value;
+                    }
+                    
+                    // Apply contrast
+                    vec3 applyContrast(vec3 color, float amount) {
+                        return ((color - 0.5) * max(amount, 0.0)) + 0.5;
+                    }
+                    
+                    // Get palette color
+                    vec3 getPaletteColor(float hue, int palette) {
+                        if (palette == 0) { // Vibrant
+                            return vec3(
+                                0.5 + 0.5 * cos(6.28318 * (hue + 0.0)),
+                                0.5 + 0.5 * cos(6.28318 * (hue + 0.33)),
+                                0.5 + 0.5 * cos(6.28318 * (hue + 0.67))
+                            );
+                        } else if (palette == 1) { // Muted
+                            return vec3(
+                                0.5 + 0.3 * cos(6.28318 * (hue + 0.0)),
+                                0.5 + 0.3 * cos(6.28318 * (hue + 0.33)),
+                                0.5 + 0.3 * cos(6.28318 * (hue + 0.67))
+                            );
+                        } else if (palette == 2) { // Cool
+                            return vec3(
+                                0.4 + 0.4 * cos(6.28318 * (hue + 0.1)),
+                                0.5 + 0.3 * cos(6.28318 * (hue + 0.4)),
+                                0.6 + 0.4 * cos(6.28318 * (hue + 0.7))
+                            );
+                        } else { // Warm
+                            return vec3(
+                                0.6 + 0.4 * cos(6.28318 * (hue + 0.0)),
+                                0.5 + 0.3 * cos(6.28318 * (hue + 0.3)),
+                                0.4 + 0.4 * cos(6.28318 * (hue + 0.6))
+                            );
+                        }
+                    }
+                    
+                    void main() {
+                        // Apply zoom and pan
+                        vec2 uv = (vUv - 0.5 - offset) / zoom + 0.5;
+                        
+                        // Calculate normalized mouse position
+                        vec2 normMouse = mix(mouse, targetMouse, 0.1);
+                        
+                        // Calculate distance from mouse
+                        float distFromMouse = distance(uv, normMouse);
+                        
+                        // Calculate base hue based on mouse position and interaction mode
+                        float hue = 0.0;
+                        float brightness = 1.0;
+                        
+                        if (interactionMode == 0 || interactionMode == 2) { // Hue or Both
+                            hue = normMouse.x;
+                        }
+                        
+                        if (interactionMode == 1 || interactionMode == 2) { // Brightness or Both
+                            brightness = 1.0 - normMouse.y * 0.5;
+                        }
+                        
+                        // Add time-based animation
+                        float timeEffect = time * speed * 0.5;
+                        hue += timeEffect * 0.05;
+                        
+                        // Add ripple effect if recently clicked
+                        float ripple = 0.0;
+                        if (clickTime > 0.0) {
+                            float rippleDist = distance(uv, clickPos);
+                            ripple = sin(rippleDist * 30.0 - clickTime * 10.0) * 
+                                     exp(-rippleDist * 5.0 - clickTime * 2.0) * 
+                                     rippleIntensity * clickTime;
+                            hue += ripple * 0.2;
+                        }
+                        
+                        // Add subtle noise for organic feel
+                        float noiseValue = fbm(uv * 3.0 + timeEffect * 0.2, 3) * 0.1;
+                        hue += noiseValue;
+                        
+                        // Get color from palette
+                        vec3 color = getPaletteColor(hue, palette);
+                        
+                        // Apply brightness
+                        color *= brightness;
+                        
+                        // Apply contrast
+                        color = applyContrast(color, contrast);
+                        
+                        // Add vignette effect
+                        float vignette = 1.0 - smoothstep(0.7, 1.4, length(uv - 0.5));
+                        color *= vignette;
+                        
+                        gl_FragColor = vec4(color, 1.0);
+                    }
+                `,
+                transparent: false
+            });
+            
+            // Create mesh
+            const geometry = new THREE.PlaneGeometry(2, 2);
+            mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+            
+            // Event listeners
+            window.addEventListener('resize', onWindowResize);
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+            document.addEventListener('click', onClick);
+            document.addEventListener('touchstart', onTouchStart, { passive: false });
+            document.addEventListener('wheel', onMouseWheel, { passive: false });
+            
+            // UI event listeners
+            toggleUI.addEventListener('click', () => {
+                ui.style.display = ui.style.display === 'none' ? 'block' : 'none';
+            });
+            
+            speedSlider.addEventListener('input', () => {
+                const value = parseFloat(speedSlider.value);
+                material.uniforms.speed.value = value;
+                speedValue.textContent = value.toFixed(1);
+            });
+            
+            contrastSlider.addEventListener('input', () => {
+                const value = parseFloat(contrastSlider.value);
+                material.uniforms.contrast.value = value;
+                contrastValue.textContent = value.toFixed(1);
+            });
+            
+            rippleIntensitySlider.addEventListener('input', () => {
+                const value = parseFloat(rippleIntensitySlider.value);
+                material.uniforms.rippleIntensity.value = value;
+                rippleIntensityValue.textContent = value.toFixed(2);
+            });
+            
+            paletteVibrant.addEventListener('click', () => {
+                material.uniforms.palette.value = 0;
+                setActivePalette(paletteVibrant);
+            });
+            
+            paletteMuted.addEventListener('click', () => {
+                material.uniforms.palette.value = 1;
+                setActivePalette(paletteMuted);
+            });
+            
+            paletteCool.addEventListener('click', () => {
+                material.uniforms.palette.value = 2;
+                setActivePalette(paletteCool);
+            });
+            
+            paletteWarm.addEventListener('click', () => {
+                material.uniforms.palette.value = 3;
+                setActivePalette(paletteWarm);
+            });
+            
+            interactionHue.addEventListener('click', () => {
+                material.uniforms.interactionMode.value = 0;
+                setActiveInteraction(interactionHue);
+            });
+            
+            interactionBrightness.addEventListener('click', () => {
+                material.uniforms.interactionMode.value = 1;
+                setActiveInteraction(interactionBrightness);
+            });
+            
+            interactionBoth.addEventListener('click', () => {
+                material.uniforms.interactionMode.value = 2;
+                setActiveInteraction(interactionBoth);
+            });
+            
+            resetButton.addEventListener('click', resetView);
+            
+            zoomIn.addEventListener('click', () => {
+                zoomTarget = Math.min(zoomTarget * 1.2, 10.0);
+                updateZoom();
+            });
+            
+            zoomOut.addEventListener('click', () => {
+                zoomTarget = Math.max(zoomTarget / 1.2, 0.1);
+                updateZoom();
+            });
+            
+            // Handle canvas drag for panning
+            renderer.domElement.addEventListener('mousedown', onDragStart);
+            renderer.domElement.addEventListener('touchstart', onDragStart);
+            document.addEventListener('mousemove', onDragMove);
+            document.addEventListener('touchmove', onDragMove, { passive: false });
+            document.addEventListener('mouseup', onDragEnd);
+            document.addEventListener('touchend', onDragEnd);
+            
+            // Start animation loop
+            animate();
+        }
+        
+        // Set active palette button
+        function setActivePalette(activeButton) {
+            const buttons = [paletteVibrant, paletteMuted, paletteCool, paletteWarm];
+            buttons.forEach(btn => btn.classList.remove('active'));
+            activeButton.classList.add('active');
+        }
+        
+        // Set active interaction button
+        function setActiveInteraction(activeButton) {
+            const buttons = [interactionHue, interactionBrightness, interactionBoth];
+            buttons.forEach(btn => btn.classList.remove('active'));
+            activeButton.classList.add('active');
+        }
+        
+        // Reset view to default
+        function resetView() {
+            zoomTarget = 1.0;
+            targetOffsetX = 0;
+            targetOffsetY = 0;
+            updateZoom();
+        }
+        
+        // Update zoom and pan
+        function updateZoom() {
+            zoom = zoom * 0.7 + zoomTarget * 0.3;
+            offsetX = offsetX * 0.7 + targetOffsetX * 0.3;
+            offsetY = offsetY * 0.7 + targetOffsetY * 0.3;
+            
+            material.uniforms.zoom.value = zoom;
+            material.uniforms.offset.value.set(offsetX, offsetY);
+            
+            zoomValue.textContent = `${Math.round(zoom * 100)}%`;
+            
+            if (Math.abs(zoom - zoomTarget) > 0.001 || 
+                Math.abs(offsetX - targetOffsetX) > 0.001 || 
+                Math.abs(offsetY - targetOffsetY) > 0.001) {
+                requestAnimationFrame(updateZoom);
+            }
+        }
+        
+        // Handle window resize
+        function onWindowResize() {
+            const maxWidth = 1200;
+            const aspectRatio = 16/9;
+            const width = Math.min(window.innerWidth, maxWidth);
+            const height = width / aspectRatio;
+            
+            renderer.setSize(width, height);
+            material.uniforms.resolution.value.set(width, height);
+        }
+        
+        // Handle mouse movement
+        function onMouseMove(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouseX = (event.clientX - rect.left) / rect.width;
+            mouseY = (event.clientY - rect.top) / rect.height;
+            
+            targetMouseX = mouseX;
+            targetMouseY = mouseY;
+        }
+        
+        // Handle touch movement
+        function onTouchMove(event) {
+            event.preventDefault();
+            if (event.touches.length > 0) {
+                const rect = renderer.domElement.getBoundingClientRect();
+                mouseX = (event.touches[0].clientX - rect.left) / rect.width;
+                mouseY = (event.touches[0].clientY - rect.top) / rect.height;
+                
+                targetMouseX = mouseX;
+                targetMouseY = mouseY;
+            }
+        }
+        
+        // Handle click
+        function onClick(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            clickX = (event.clientX - rect.left) / rect.width;
+            clickY = (event.clientY - rect.top) / rect.height;
+            
+            material.uniforms.clickPos.value.set(clickX, clickY);
+            material.uniforms.clickTime.value = 1.0;
+        }
+        
+        // Handle touch start
+        function onTouchStart(event) {
+            event.preventDefault();
+            if (event.touches.length > 0) {
+                const rect = renderer.domElement.getBoundingClientRect();
+                clickX = (event.touches[0].clientX - rect.left) / rect.width;
+                clickY = (event.touches[0].clientY - rect.top) / rect.height;
+                
+                material.uniforms.clickPos.value.set(clickX, clickY);
+                material.uniforms.clickTime.value = 1.0;
+            }
+        }
+        
+        // Handle mouse wheel for zoom
+        function onMouseWheel(event) {
+            event.preventDefault();
+            
+            // Get mouse position in normalized coordinates
+            const rect = renderer.domElement.getBoundingClientRect();
+            const mouseX = (event.clientX - rect.left) / rect.width;
+            const mouseY = (event.clientY - rect.top) / rect.height;
+            
+            // Calculate zoom center in world space
+            zoomCenter.x = mouseX;
+            zoomCenter.y = mouseY;
+            
+            // Adjust zoom
+            const delta = -event.deltaY * 0.001;
+            zoomTarget = Math.max(0.1, Math.min(10.0, zoomTarget * Math.exp(delta)));
+            
+            // Adjust offset to zoom toward mouse position
+            targetOffsetX = (targetOffsetX - mouseX + 0.5) * (zoomTarget / zoom) + mouseX - 0.5;
+            targetOffsetY = (targetOffsetY - mouseY + 0.5) * (zoomTarget / zoom) + mouseY - 0.5;
+            
+            updateZoom();
+        }
+        
+        // Handle drag start
+        function onDragStart(event) {
+            if (event.type === 'mousedown') {
+                isDragging = true;
+                const rect = renderer.domElement.getBoundingClientRect();
+                lastX =event.clientX - rect.left;
+                lastY = event.clientY - rect.top;
+            } else if (event.type === 'touchstart' && event.touches.length === 1) {
+                isDragging = true;
+                const rect = renderer.domElement.getBoundingClientRect();
+                lastX = event.touches[0].clientX - rect.left;
+                lastY = event.touches[0].clientY - rect.top;
+            }
+        }
+        
+        // Handle drag move
+        function onDragMove(event) {
+            if (!isDragging) return;
+            
+            event.preventDefault();
+            
+            let clientX, clientY;
+            if (event.type === 'mousemove') {
+                clientX = event.clientX;
+                clientY = event.clientY;
+            } else if (event.type === 'touchmove' && event.touches.length === 1) {
+                clientX = event.touches[0].clientX;
+                clientY = event.touches[0].clientY;
+            } else {
+                return;
+            }
+            
+            const rect = renderer.domElement.getBoundingClientRect();
+            const currentX = clientX - rect.left;
+            const currentY = clientY - rect.top;
+            
+            const deltaX = (currentX - lastX) / (rect.width * zoom);
+            const deltaY = (currentY - lastY) / (rect.height * zoom);
+            
+            targetOffsetX -= deltaX;
+            targetOffsetY -= deltaY;
+            
+            lastX = currentX;
+            lastY = currentY;
+            
+            updateZoom();
+        }
+        
+        // Handle drag end
+        function onDragEnd() {
+            isDragging = false;
+        }
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Update time
+            material.uniforms.time.value += 0.016; // Approximate 60fps delta
+            
+            // Smooth mouse movement
+            material.uniforms.mouse.value.lerp(
+                new THREE.Vector2(targetMouseX, targetMouseY),
+                0.1
+            );
+            
+            // Fade out click effect
+            if (material.uniforms.clickTime.value > 0) {
+                material.uniforms.clickTime.value -= 0.016;
+                if (material.uniforms.clickTime.value < 0) {
+                    material.uniforms.clickTime.value = 0;
+                }
+            }
+            
+            // Render scene
+            renderer.render(scene, camera);
+        }
+        
+        // Initialize
+        init();
+    </script>
+
+              
+          
+                
+          
+              
+</body></html>
